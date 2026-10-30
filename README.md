@@ -36,3 +36,9 @@ npm run build
 ```
 
 Express API in `server/`, React app in `client/`. That's the whole tour.
+
+## Screenshots
+
+![promptTester screenshot 1](images/Screenshot%202026-10-30%20at%2011.12.06.png)
+
+![promptTester screenshot 2](images/Screenshot%202026-10-30%20at%2011.12.34.png)
