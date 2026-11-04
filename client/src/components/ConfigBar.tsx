@@ -68,6 +68,17 @@ export default function ConfigBar({ config, onSave }: Props) {
           }
         />
       </label>
+      <label
+        className="reasoning-field"
+        title="Adds include_reasoning: true to every baseline/variant request (OpenRouter-style providers; OpenAI's official API rejects this param). Returned thinking is displayed in each column regardless of this toggle."
+      >
+        <input
+          type="checkbox"
+          checked={draft.reasoning}
+          onChange={(e) => set("reasoning", e.target.checked)}
+        />
+        <span>Reasoning</span>
+      </label>
       <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
         Save
       </button>

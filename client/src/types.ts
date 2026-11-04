@@ -8,6 +8,7 @@ export interface Config {
   url: string;
   apiKey: string;
   timeoutMs: number;
+  reasoning: boolean;
   judge: JudgeConfig;
 }
 
@@ -42,6 +43,9 @@ export interface RequestResult {
   latencyMs: number;
   content: string | null;
   usage: Usage | null;
+  reasoning?: string | null;
+  reasoningTokens?: number | null;
+  injectedReasoning?: boolean;
   responseBody: unknown;
   error: string | null;
   judge?: JudgeResult | null;

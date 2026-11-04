@@ -12,6 +12,38 @@ function extractContent(responseBody) {
   return null;
 }
 
+function extractReasoning(responseBody) {
+  const message = responseBody?.choices?.[0]?.message;
+  if (typeof message !== "object" || message === null) return null;
+  for (const key of ["reasoning_content", "reasoning"]) {
+    const value = message[key];
+    if (typeof value === "string" && value !== "") return value;
+  }
+  if (Array.isArray(message.content)) {
+    const parts = message.content
+      .filter((part) => part?.type === "thinking")
+      .map((part) =>
+        typeof part?.thinking === "string"
+          ? part.thinking
+          : typeof part?.text === "string"
+            ? part.text
+            : null
+      )
+      .filter((part) => part !== null);
+    if (parts.length > 0) return parts.join("\n");
+  }
+  return null;
+}
+
+function extractReasoningTokens(responseBody) {
+  const usage = responseBody?.usage;
+  if (!usage) return null;
+  const detailed = usage.completion_tokens_details?.reasoning_tokens;
+  if (typeof detailed === "number") return detailed;
+  if (typeof usage.reasoning_tokens === "number") return usage.reasoning_tokens;
+  return null;
+}
+
 function extractUsage(responseBody) {
   const usage = responseBody?.usage;
   if (!usage) return null;
@@ -34,6 +66,8 @@ async function sendRequest({ body, config }) {
   let responseBody = null;
   let content = null;
   let usage = null;
+  let reasoning = null;
+  let reasoningTokens = null;
   let error = null;
   try {
     const res = await fetch(config.url, {
@@ -56,12 +90,16 @@ async function sendRequest({ body, config }) {
     }
     content = extractContent(responseBody);
     usage = extractUsage(responseBody);
+    reasoning = extractReasoning(responseBody);
+    reasoningTokens = extractReasoningTokens(responseBody);
   } catch (e) {
     ok = false;
     status = null;
     responseBody = null;
     content = null;
     usage = null;
+    reasoning = null;
+    reasoningTokens = null;
     error =
       e.name === "TimeoutError" || e.name === "AbortError"
         ? `Request timed out after ${config.timeoutMs}ms`
@@ -74,6 +112,8 @@ async function sendRequest({ body, config }) {
     latencyMs: Date.now() - start,
     content,
     usage,
+    reasoning,
+    reasoningTokens,
     responseBody,
     error,
   };
@@ -156,13 +196,20 @@ export async function executeRun({ baseline, variants, judge, config }) {
   ];
 
   const results = [];
+  const requestReasoning = config.reasoning === true;
   for (const target of targets) {
     const stampedBody = { ...target.body, seed: effectiveSeed };
+    let injectedReasoning = false;
+    if (requestReasoning && !("include_reasoning" in stampedBody)) {
+      stampedBody.include_reasoning = true;
+      injectedReasoning = true;
+    }
     const result = await sendRequest({ body: stampedBody, config });
     results.push({
       kind: target.kind,
       variantId: target.variantId,
       name: target.name,
+      injectedReasoning,
       ...result,
     });
   }

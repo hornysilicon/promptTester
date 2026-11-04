@@ -2,13 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import ConfigBar from "./components/ConfigBar";
 import JudgePanel from "./components/JudgePanel";
 import RequestEditor from "./components/RequestEditor";
-import ResponseCard from "./components/ResponseCard";
 import RunBar from "./components/RunBar";
 import SideBySide from "./components/SideBySide";
 import VariantTabs from "./components/VariantTabs";
 import { deleteRun, executeRun, getConfig, getRun, judgeRun, listRuns } from "./lib/api";
-import { parseBodyText } from "./lib/lenient";
-import type { Config, JudgeConfig, RunResult, RunSummary, Variant } from "./types";
+import { parseBodyText, toPrettyJson } from "./lib/lenient";
+import type {
+  Config,
+  JudgeConfig,
+  RequestResult,
+  RunResult,
+  RunSummary,
+  Variant,
+} from "./types";
 
 const EXAMPLE_BASELINE = `{
   "model": "gpt-4o-mini",
@@ -34,6 +40,70 @@ function bodyOf(text: string): object {
   const parsed = parseBodyText(text);
   return parsed.ok ? parsed.body : {};
 }
+
+function newVariantId(): string {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : "v-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+
+function sanitizeBody(body: object, stripReasoning: boolean): object {
+  const rest: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  delete rest.stream;
+  if (stripReasoning) delete rest.include_reasoning;
+  return rest;
+}
+
+const STORAGE_KEY = "promptTester:editor";
+const STORAGE_VERSION = 1;
+
+interface StoredEditor {
+  v: number;
+  baselineText: string;
+  variants: Variant[];
+  activeId: string;
+}
+
+function defaultEditorState(): StoredEditor {
+  return { v: STORAGE_VERSION, baselineText: EXAMPLE_BASELINE, variants: [], activeId: "baseline" };
+}
+
+function isValidStoredEditor(value: unknown): value is StoredEditor {
+  if (typeof value !== "object" || value === null) return false;
+  const stored = value as Partial<StoredEditor>;
+  return (
+    stored.v === STORAGE_VERSION &&
+    typeof stored.baselineText === "string" &&
+    Array.isArray(stored.variants) &&
+    stored.variants.every(
+      (v) =>
+        typeof v === "object" &&
+        v !== null &&
+        typeof (v as Variant).id === "string" &&
+        typeof (v as Variant).name === "string" &&
+        typeof (v as Variant).text === "string"
+    ) &&
+    typeof stored.activeId === "string"
+  );
+}
+
+function loadEditorState(): StoredEditor {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return defaultEditorState();
+    const parsed: unknown = JSON.parse(raw);
+    if (!isValidStoredEditor(parsed)) return defaultEditorState();
+    const activeId =
+      parsed.activeId === "baseline" || parsed.variants.some((v) => v.id === parsed.activeId)
+        ? parsed.activeId
+        : "baseline";
+    return { ...parsed, activeId };
+  } catch {
+    return defaultEditorState();
+  }
+}
+
+const INITIAL_EDITOR = loadEditorState();
 
 const INITIAL_JUDGE: JudgeConfig = { enabled: false, model: "", prompt: "" };
 
@@ -61,15 +131,26 @@ function formatWhen(iso: string): string {
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [baselineText, setBaselineText] = useState(EXAMPLE_BASELINE);
-  const [variants, setVariants] = useState<Variant[]>([]);
-  const [activeId, setActiveId] = useState("baseline");
+  const [baselineText, setBaselineText] = useState(INITIAL_EDITOR.baselineText);
+  const [variants, setVariants] = useState<Variant[]>(INITIAL_EDITOR.variants);
+  const [activeId, setActiveId] = useState(INITIAL_EDITOR.activeId);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [judging, setJudging] = useState(false);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [judge, setJudge] = useState<JudgeConfig>(INITIAL_JUDGE);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ v: STORAGE_VERSION, baselineText, variants, activeId } satisfies StoredEditor)
+      );
+    } catch {
+      return;
+    }
+  }, [baselineText, variants, activeId]);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -115,10 +196,7 @@ export default function App() {
     } catch {
       text = source;
     }
-    const id =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : "v-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    const id = newVariantId();
     setVariants((vs) => [...vs, { id, name: "", text }]);
     setActiveId(id);
   }
@@ -176,6 +254,40 @@ export default function App() {
     } finally {
       setJudging(false);
     }
+  }
+
+  function handleRecover(results: RequestResult[]) {
+    if (variants.length > 0) {
+      const ok = window.confirm(
+        "Replace the baseline and variants currently in the editor with this run's requests?"
+      );
+      if (!ok) return;
+    }
+    const baseline = results.find((r) => r.kind === "baseline");
+    if (baseline !== undefined) {
+      setBaselineText(
+        toPrettyJson(sanitizeBody(baseline.requestBody, baseline.injectedReasoning === true))
+      );
+    }
+    setVariants(
+      results
+        .filter((r) => r.kind === "variant")
+        .map((r) => ({
+          id: newVariantId(),
+          name: r.name,
+          text: toPrettyJson(sanitizeBody(r.requestBody, r.injectedReasoning === true)),
+        }))
+    );
+    setActiveId("baseline");
+  }
+
+  function handlePromoteToBaseline(result: RequestResult) {
+    setBaselineText(
+      toPrettyJson(sanitizeBody(result.requestBody, result.injectedReasoning === true))
+    );
+    setVariants([]);
+    setActiveId("baseline");
+    setRunResult(null);
   }
 
   async function handleSelectRun(id: string) {
@@ -277,12 +389,11 @@ export default function App() {
                 )}
               </button>
             </div>
-            <div className="response-list">
-              {runResult.results.map((r) => (
-                <ResponseCard key={`${r.kind}:${r.variantId ?? "baseline"}`} result={r} />
-              ))}
-            </div>
-            <SideBySide results={runResult.results} />
+            <SideBySide
+              results={runResult.results}
+              onRecover={() => handleRecover(runResult.results)}
+              onPromote={handlePromoteToBaseline}
+            />
           </section>
         ) : null}
       </main>

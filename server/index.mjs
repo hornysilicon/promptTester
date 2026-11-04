@@ -26,7 +26,7 @@ app.get("/api/config", async (req, res) => {
 });
 
 app.put("/api/config", async (req, res) => {
-  const { url, apiKey, timeoutMs } = req.body ?? {};
+  const { url, apiKey, timeoutMs, reasoning } = req.body ?? {};
   if (typeof url !== "string" || url.length === 0) {
     return res.status(400).json({ error: "url must be a non-empty string" });
   }
@@ -45,7 +45,16 @@ app.put("/api/config", async (req, res) => {
   if (typeof timeoutMs !== "number" || !(timeoutMs > 0)) {
     return res.status(400).json({ error: "timeoutMs must be a positive number" });
   }
-  await saveConfig({ ...(await loadConfig()), url: normalizeUrl(url), apiKey, timeoutMs });
+  if (reasoning !== undefined && typeof reasoning !== "boolean") {
+    return res.status(400).json({ error: "reasoning must be a boolean" });
+  }
+  await saveConfig({
+    ...(await loadConfig()),
+    url: normalizeUrl(url),
+    apiKey,
+    timeoutMs,
+    ...(reasoning === undefined ? {} : { reasoning }),
+  });
   res.json({ ok: true });
 });
 

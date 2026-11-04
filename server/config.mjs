@@ -70,6 +70,7 @@ export async function loadConfig() {
       model: typeof loadedJudge.model === "string" ? loadedJudge.model : DEFAULT_JUDGE.model,
       prompt: typeof loadedJudge.prompt === "string" ? loadedJudge.prompt : DEFAULT_JUDGE.prompt,
     },
+    reasoning: typeof loaded.reasoning === "boolean" ? loaded.reasoning : false,
   };
 }
 

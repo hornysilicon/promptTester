@@ -16,12 +16,12 @@ Open http://localhost:5173. Vite binds to all interfaces, so `http://<lan-ip>:51
 ## Use
 
 1. **URL + API key** (top bar). Any OpenAI-compatible endpoint. Paste a full URL or just a base (`http://localhost:5001/v1` — `/chat/completions` gets appended). Saved to `data/config.json`.
-2. **Baseline**: paste your request body. JSON, or a raw SillyTavern log (unquoted JS object with `+`-concatenated strings) — it gets converted to proper JSON automatically. Paste or drag-drop a `.json` file.
+2. **Baseline**: paste your request body. JSON, a raw SillyTavern log (unquoted JS object with `+`-concatenated strings), or a Lumiverse markdown export (`# provider / model` header + `### [N] ROLE` sections + `### PARAMETERS` block) — both get auto-detected and converted to proper JSON on paste. Paste or drag-drop a `.json`/`.md` file.
 3. **Variants**: hit `+` (clones the active tab), edit anything — model, temp, messages. Rename by double-click. **Raw | Parsed** toggle: parsed shows every key as a collapsible box with readable, newline-respecting, editable text.
 4. **Run all**: requests go out sequentially. Every request in a run shares one seed — baseline's seed wins, otherwise one is generated (shown in the UI). No excuses for noisy comparisons.
-5. **Results**: status/latency/tokens per request, then all responses side by side. Collapse columns down to two if you want. HTML in responses (fonts, details, inline CSS) is rendered in a sandboxed iframe — untick "Render HTML" for raw text.
+5. **Results**: status/latency/tokens per request, all responses side by side. Collapse columns down to two if you want. HTML in responses (fonts, details, inline CSS) is rendered in a sandboxed iframe — untick "Render HTML" for raw text, hit **Raw** for the full response JSON. **Recover** loads a run's baseline + variants back into the editor; **Make baseline** on a variant column starts a new round with it as the baseline.
 6. **Judge**: write an evaluation prompt in the Judge panel — `{{response}}` marks where each response gets inserted (no placeholder = responses appended as the user message). Pick a judge model (blank = baseline's model), flip on Auto-judge to score every run automatically, or hit **Judge** on any run (including old ones from History) to (re)judge it. Verdicts show under each response and in the side-by-side columns. Judge settings live in `data/config.json`.
-7. **History**: click a past run to reload it; hover an entry and hit `×` to delete it for good.
+7. **History**: click a past run to reload it; hover an entry and hit `×` to delete it for good. The editor (baseline + variants) survives page reloads.
 
 ## Files
 

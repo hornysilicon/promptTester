@@ -15,16 +15,14 @@ export default function RequestEditor({ title, value, onChange }: Props) {
   const validation = useMemo(() => parseBodyText(value), [value]);
   const isJson = validation.ok && validation.format === "json";
   const isJs = validation.ok && validation.format === "js";
+  const isLumiverse = validation.ok && validation.format === "lumiverse";
+  const convertible = validation.ok && validation.format !== "json";
   const showParsed = mode === "parsed" && validation.ok;
 
   async function loadFile(file: File) {
     const text = await file.text();
     const parsed = parseBodyText(text);
-    if (parsed.ok && parsed.format === "js") {
-      onChange(toPrettyJson(parsed.body));
-    } else {
-      onChange(text);
-    }
+    onChange(parsed.ok && parsed.format !== "json" ? toPrettyJson(parsed.body) : text);
   }
 
   function format() {
@@ -34,14 +32,14 @@ export default function RequestEditor({ title, value, onChange }: Props) {
   }
 
   function convertNow() {
-    if (isJs && validation.ok) {
+    if (convertible && validation.ok) {
       onChange(toPrettyJson(validation.body));
     }
   }
 
   function switchToParsed() {
     if (!validation.ok) return;
-    if (isJs) onChange(toPrettyJson(validation.body));
+    if (validation.format !== "json") onChange(toPrettyJson(validation.body));
     setMode("parsed");
   }
 
@@ -73,7 +71,7 @@ export default function RequestEditor({ title, value, onChange }: Props) {
           <input
             ref={fileRef}
             type="file"
-            accept=".json"
+            accept=".json,.md"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -83,7 +81,7 @@ export default function RequestEditor({ title, value, onChange }: Props) {
           />
         </div>
       </div>
-      {isJs ? (
+      {convertible ? (
         <div
           className="error-banner"
           style={{
@@ -95,7 +93,11 @@ export default function RequestEditor({ title, value, onChange }: Props) {
             gap: "10px",
           }}
         >
-          <span>SillyTavern / JS object literal — will be converted</span>
+          <span>
+            {isLumiverse
+              ? "Lumiverse markdown — will be converted"
+              : "SillyTavern / JS object literal — will be converted"}
+          </span>
           <button className="btn" onClick={convertNow}>
             Convert now
           </button>
@@ -126,7 +128,7 @@ export default function RequestEditor({ title, value, onChange }: Props) {
             onPaste={(e) => {
               const text = e.clipboardData.getData("text");
               const parsed = parseBodyText(text);
-              if (parsed.ok && parsed.format === "js") {
+              if (parsed.ok && parsed.format !== "json") {
                 e.preventDefault();
                 onChange(toPrettyJson(parsed.body));
               }
